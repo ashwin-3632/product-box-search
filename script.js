@@ -1,4 +1,4 @@
-const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbynzl5GZ9f25wbioYtXZkjXmF3T6Maer8fvZqlZxFCFzaeKqcODMNQ0FIvzP8qc4P7m_g/exec";
+const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbyWIOJ3sUTr83JsIRB_A1XghJ5Lx-MuY6w6LSgTdcob4Gl3fvJFxGmDrgz7o00Z1AsvWA/exec";
 
 let products = [];
 
