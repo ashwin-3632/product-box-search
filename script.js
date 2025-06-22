@@ -73,7 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Auto-scroll to tile smoothly
       tile?.scrollIntoView({ behavior: "smooth", block: "start" });
 
-    }
+    } 
   });
 
   function displayResults(query) {
