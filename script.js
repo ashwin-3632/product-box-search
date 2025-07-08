@@ -1,6 +1,7 @@
 const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbyWIOJ3sUTr83JsIRB_A1XghJ5Lx-MuY6w6LSgTdcob4Gl3fvJFxGmDrgz7o00Z1AsvWA/exec";
 
 let products = [];
+let latestExportRows = [];
 
 document.addEventListener("DOMContentLoaded", () => {
   const input = document.getElementById("searchInput");
@@ -10,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeScannerBtn = document.getElementById("closeScanner");
   const csvExportContainer = document.getElementById("csvExportContainer");
   const csvExportBtn = document.getElementById("csvExportBtn");
+  const pdfExportBtn = document.getElementById("pdfExportBtn");
 
   fetch(SHEET_API_URL)
     .then((res) => res.json())
@@ -34,10 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const containerId = `box-detail-${boxNum}`;
       const existingContainer = document.getElementById(containerId);
 
-      // Close all other box-detail divs
-      document.querySelectorAll('[id^="box-detail-"]').forEach(el => el.remove());
-
-      // If already open, don't re-open
+      document.querySelectorAll('[id^="box-detail-"]').forEach((el) => el.remove());
       if (existingContainer) return;
 
       const items = products.filter((p) => String(p["Box Number"]) === boxNum);
@@ -69,11 +68,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const tile = e.target.closest(".tile");
       tile?.insertAdjacentHTML("beforeend", tableHTML);
-
-      // Auto-scroll to tile smoothly
       tile?.scrollIntoView({ behavior: "smooth", block: "start" });
-
-    } 
+    }
   });
 
   function displayResults(query) {
@@ -84,6 +80,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     let content = "";
+    latestExportRows = [];
 
     const bySkuOrProduct = products.filter(
       (p) =>
@@ -91,40 +88,32 @@ document.addEventListener("DOMContentLoaded", () => {
         String(p["Product Name"]).toLowerCase().includes(query)
     );
 
-    const byBox = products.filter(
-      (p) => String(p["Box Number"]).toLowerCase() === query
-    );
-
-    const byColour = products.filter(
-      (p) => String(p["Colour"]).toLowerCase() === query
-    );
+    const byBox = products.filter((p) => String(p["Box Number"]).toLowerCase() === query);
+    const byColour = products.filter((p) => String(p["Colour"]).toLowerCase() === query);
 
     if (byBox.length > 0 && bySkuOrProduct.length === 0) {
-      const skuMap = {};
-      byBox.forEach((item) => {
-        const key = item["Box Number"];
-        if (!skuMap[key]) skuMap[key] = [];
-        skuMap[key].push(item);
+      byBox.forEach((p) => {
+        latestExportRows.push([
+          p["SKU ID"],
+          p["Product Name"],
+          p["Current Stock"],
+          p["Box Number"],
+          p["Colour"]
+        ]);
       });
 
-      for (const box in skuMap) {
-        const skus = skuMap[box]
-          .map(
-            (p) =>
-              `<span class="text-blue-600 underline cursor-pointer search-link" data-value="${p["SKU ID"]}">${p["SKU ID"]}</span>`
-          )
-          .join(", ");
-        const productNames = skuMap[box]
-          .map((p) => p["Product Name"])
-          .filter((v, i, a) => a.indexOf(v) === i)
-          .join(", ");
-        content += `
-        <div class="bg-white rounded-xl p-4 shadow border">
-          <div><strong>Box Number:</strong> <span class="text-green-600 underline cursor-pointer search-link" data-value="${box}">${box}</span></div>
-          <div><strong>Product(s):</strong> ${productNames}</div>
-          <div><strong>SKU ID(s):</strong> ${skus}</div>
-        </div>`;
-      }
+      content += byBox
+        .map((item) => {
+          return `
+          <div class="bg-white rounded-xl p-4 shadow border">
+            <div><strong>Box Number:</strong> 
+              <span class="text-green-600 underline cursor-pointer search-link" data-value="${item["Box Number"]}">${item["Box Number"]}</span>
+            </div>
+            <div><strong>Product:</strong> ${item["Product Name"]}</div>
+            <div><strong>SKU:</strong> ${item["SKU ID"]}</div>
+          </div>`;
+        })
+        .join("");
     } else if (byColour.length > 0 && bySkuOrProduct.length === 0 && byBox.length === 0) {
       const skuMap = {};
       byColour.forEach((item) => {
@@ -138,20 +127,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const first = entries[0];
         const productName = first["Product Name"];
         const imageUrl = first["Image URL"];
-        const quantity = entries.reduce(
-          (sum, p) => sum + Number(p["Current Stock"] || 0),
-          0
-        );
+        const quantity = entries.reduce((sum, p) => sum + Number(p["Current Stock"] || 0), 0);
 
         const allColours = products
           .filter((p) => p["SKU ID"] === sku)
           .map((p) => p["Colour"])
           .filter((v, i, a) => a.indexOf(v) === i)
-          .map(
-            (c) =>
-              `<span class="text-pink-600 underline cursor-pointer search-link" data-value="${c}">${c}</span>`
-          )
           .join(", ");
+
+        latestExportRows.push([sku, productName, quantity, "-", allColours]);
 
         content += `
         <div class="bg-white rounded-xl p-4 shadow border tile">
@@ -178,30 +162,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const items = skuMap[key];
         const [skuId, productName] = key.split("__");
 
-        const allBoxes = items
-          .map((p) => p["Box Number"])
-          .filter((v, i, a) => a.indexOf(v) === i)
-          .map(
-            (b) =>
-              `<span class="text-green-600 underline cursor-pointer box-toggle" data-box="${b}">${b}</span>`
-          )
-          .join(", ");
-
-        const allColours = items
-          .map((p) => p["Colour"])
-          .filter((v, i, a) => a.indexOf(v) === i)
-          .map(
-            (c) =>
-              `<span class="text-pink-600 underline cursor-pointer search-link" data-value="${c}">${c}</span>`
-          )
-          .join(", ");
-
-        const stockTotal = items.reduce(
-          (sum, p) => sum + Number(p["Current Stock"] || 0),
-          0
-        );
-
+        const allBoxes = items.map((p) => p["Box Number"]).filter((v, i, a) => a.indexOf(v) === i).join(", ");
+        const allColours = items.map((p) => p["Colour"]).filter((v, i, a) => a.indexOf(v) === i).join(", ");
+        const stockTotal = items.reduce((sum, p) => sum + Number(p["Current Stock"] || 0), 0);
         const imageUrl = items[0]["Image URL"];
+
+        latestExportRows.push([skuId, productName, stockTotal, allBoxes, allColours]);
 
         content += `
         <div class="bg-white rounded-xl p-4 shadow border tile">
@@ -219,11 +185,44 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // CSV export logic remains unchanged
-    // [Your previous CSV export block here – no changes needed]
-
     resultsDiv.innerHTML = content || `<p>No matching results found.</p>`;
+    csvExportContainer.classList.toggle("hidden", !latestExportRows.length);
   }
+
+  csvExportBtn.onclick = () => {
+    const csvContent = "data:text/csv;charset=utf-8," +
+      ["SKU ID,Product Name,Quantity,Box Numbers,Colours"]
+        .concat(latestExportRows.map(r => r.map(v => `"${v}"`).join(",")))
+        .join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "product_search_results.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  pdfExportBtn.onclick = () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(10);
+    doc.text("Product Search Results", 14, 12);
+
+    const headers = [["SKU ID", "Product Name", "Qty", "Box Nos", "Colours"]];
+    const body = latestExportRows;
+
+    doc.autoTable({
+      startY: 18,
+      head: headers,
+      body: body,
+      theme: 'striped',
+      headStyles: { fillColor: [52, 73, 94] }
+    });
+
+    doc.save("product_search_results.pdf");
+  };
 
   // Barcode scanner
   let qrScanner;
@@ -233,10 +232,7 @@ document.addEventListener("DOMContentLoaded", () => {
     qrScanner
       .start(
         { facingMode: "environment" },
-        {
-          fps: 10,
-          qrbox: 200,
-        },
+        { fps: 10, qrbox: 200 },
         (decodedText) => {
           document.getElementById("searchInput").value = decodedText;
           displayResults(decodedText.toLowerCase());
